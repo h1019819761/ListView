@@ -1,0 +1,148 @@
+import React from 'react';
+import { connect } from 'dva';
+// eslint-disable-next-line import/no-extraneous-dependencies
+import router from 'umi/router';
+import {
+  ListView, Toast,
+} from 'antd-mobile';
+import PropTypes from 'prop-types';
+import withEmptyTitle from '../../components/withEmptyTitle';
+import styles from './index.less';
+import withNativeInteractive from '../../components/withNativeInteractive';
+
+const ListViewWithEmptyTitle = withEmptyTitle(ListView);
+
+const navigateDetail = (detailimgUrl) => {
+  if (!detailimgUrl) {
+    return Toast.info('暂无详情！');
+  }
+  router.push({
+    pathname: '/expressDetail',
+    state: { detailimgUrl },
+  });
+};
+
+// 快讯
+class WuLinExpress extends React.Component {
+  constructor(props) {
+    super(props);
+    const ds = new ListView.DataSource({ rowHasChanged: (r1, r2) => r1 !== r2 });
+    this.state = {
+      page: 1, // 页码
+      totalPage: '', // 总页数
+      dataSource: ds,
+      preBillData: [],
+      allBillData: [],
+      isLoading: true,
+      isHasMore: false,
+    };
+  }
+
+  componentDidMount() {
+    const { page } = this.state;
+    this.fetchWuLinData(page);
+  }
+
+  componentWillUnmount() {
+    const { dataSource } = this.state;
+    this.setState({
+      page: 1,
+      dataSource: dataSource.cloneWithRows([]),
+    });
+  }
+
+  fetchWuLinData =(currentPage) => {
+    const { dispatch } = this.props;
+    dispatch({
+      type: 'wulinExpress/fetchWulinExpress',
+      payload: {
+        pageNum: currentPage,
+      },
+      callback: (list, pagination) => {
+        const { preBillData, page, dataSource } = this.state;
+        const allBillData = preBillData.concat(list);
+        const totalPage = Math.ceil(pagination.total / pagination.pageSize);
+        this.setState({
+          preBillData: allBillData,
+          allBillData,
+          totalPage,
+          page: page + 1,
+          dataSource: dataSource.cloneWithRows(allBillData),
+          isLoading: false,
+          isHasMore: page !== totalPage,
+        });
+      },
+    });
+  }
+
+
+  onEndReached = () => {
+    const { page, totalPage } = this.state;
+    if ((Number(page) - 1) < Number(totalPage)) {
+      this.setState({
+        isLoading: true,
+      });
+      this.fetchWuLinData(page);
+      return;
+    }
+    this.setState({
+      isLoading: false,
+      isHasMore: false,
+    });
+  }
+
+  renderFooter = () => {
+    const {
+      isLoading,
+      isHasMore,
+      page,
+      totalPage,
+    } = this.state;
+    let messageSpan = '';
+    if (isHasMore && isLoading) {
+      messageSpan = '加载更多中...';
+    } else if (page > totalPage) {
+      messageSpan = '暂无更多内容';
+    }
+    return (
+      <div id="footerShow" className={styles.footerContainer}>
+        <span>{ messageSpan }</span>
+      </div>
+    );
+  }
+
+  renderRow = (rowData, sectionID, rowID) => (
+    <div key={rowID} className={styles.item} onClick={() => navigateDetail(rowData.detailimgUrl)}>
+      <div className={styles.info}>
+        <p className={styles.title}>{rowData.noticeTitle}</p>
+        <p className={styles.date}>{rowData.updateDate && rowData.updateDate.split(' ')[0]}</p>
+      </div>
+      <div className={styles.image} style={{ backgroundImage: `url("${rowData.titleimgUrl}")` }} />
+    </div>
+  );
+
+  render() {
+    const { dataSource, allBillData } = this.state;
+    return (
+      <div className={styles.container}>
+        <ListViewWithEmptyTitle
+          data={allBillData}
+          dataSource={dataSource}
+          renderFooter={this.renderFooter}
+          renderRow={this.renderRow}
+          style={{ height: '100vh', overflow: 'auto' }}
+          pageSize={10}
+          onEndReached={this.onEndReached}
+          onEndReachedThreshold={10}
+          height="100vh"
+        />
+      </div>
+    );
+  }
+}
+
+WuLinExpress.propTypes = {
+  dispatch: PropTypes.func.isRequired,
+};
+
+export default connect()(withNativeInteractive(WuLinExpress, { title: '快讯', hideBackButton: false, hideCloseButton: true }));
